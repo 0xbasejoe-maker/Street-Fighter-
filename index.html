@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Street Fighter II - Nokia C3 Mobile</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { 
+            background: #112233; 
+            height: 100vh; 
+            overflow: hidden; 
+            font-family: "Nokia Cellphone FC", monospace; 
+            touch-action: manipulation;
+            background: url('https://files.catbox.moe/c3-frame.png') center/contain no-repeat #112233;
+        }
+        canvas { 
+            display: block; 
+            image-rendering: pixelated;
+            margin-top: 60px;
+        }
+        .touch-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-columns: 80px 80px 80px;
+            grid-template-rows: 80px 80px;
+            gap: 15px;
+            z-index: 100;
+        }
+        .btn {
+            background: rgba(0,255,0,0.3);
+            border: 4px solid #00ff00;
+            border-radius: 20px;
+            font-size: 30px;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+            box-shadow: 0 0 20px #00ff00;
+            touch-action: manipulation;
+        }
+        .dpad { grid-column: 1; grid-row: 1/3; }
+        .punch { grid-column: 2; grid-row: 1; }
+        .kick { grid-column: 3; grid-row: 1; }
+        .jump { grid-column: 2/4; grid-row: 2; }
+        @font-face {
+            font-family: 'Nokia Cellphone FC';
+            src: url('https://files.catbox.moe/NokiaCellphoneFC.ttf');
+        }
+    </style>
+</head>
+<body>
+    <canvas id="game" width="320" height="240"></canvas>
+    
+    <div class="touch-controls">
+        <div class="btn dpad" id="dpad">← →</div>
+        <div class="btn punch" id="punch">PUNCH</div>
+        <div class="btn kick" id="kick">KICK</div>
+        <div class="btn jump" id="jump">JUMP</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        // Fullscreen on tap
+        canvas.addEventListener('click', () => {
+            if (!document.fullscreenElement) canvas.requestFullscreen();
+        });
+
+        const W = 320, H = 240, HEALTH_MAX = 100;
+        let p1 = { x: 50, y: 160, vx: 0, vy: 0, health: HEALTH_MAX, facing: 1, punch: 0, kick: 0 };
+        let p2 = { x: 220, y: 160, vx: 0, vy: 0, health: HEALTH_MAX, facing: -1, punch: 0, kick: 0 };
+        let score1 = 0, score2 = 0, winner = null, aiTimer = 0;
+        let left = false, right = false, jump = false, punch = false, kick = false;
+
+        // Touch controls
+        document.getElementById('dpad').addEventListener('touchstart', e => {
+            const rect = e.target.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            left = x < rect.width / 2;
+            right = x >= rect.width / 2;
+            e.preventDefault();
+        });
+        document.getElementById('dpad').addEventListener('touchend', () => { left = right = false; });
+        document.getElementById('jump').addEventListener('touchstart', () => jump = true);
+        document.getElementById('punch').addEventListener('touchstart', () => punch = true);
+        document.getElementById('kick').addEventListener('touchstart', () => kick = true);
+
+        function drawFighter(f, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(f.x+10, f.y, 20, 50);
+            ctx.fillRect(f.x+15, f.y-15, 10, 15);
+            ctx.fillRect(f.x+5, f.y+10, 10, 20);
+            ctx.fillRect(f.x+25, f.y+10, 10, 20);
+            ctx.fillRect(f.x+12, f.y+50, 8, 25);
+            ctx.fillRect(f.x+20, f.y+50, 8, 25);
+            if (f.punch > 0) ctx.fillRect(f.x + (f.facing > 0 ? 35 : -5), f.y+15, 15*f.facing, 8);
+            if (f.kick > 0) ctx.fillRect(f.x+20, f.y+45, 20*f.facing, 10);
+        }
+
+        function aiUpdate() {
+            aiTimer++;
+            let dist = p2.x - p1.x;
+            if (Math.abs(dist) > 80) p2.vx = dist > 0 ? 2 : -2;
+            else if (Math.abs(dist) < 30 && Math.random() < 0.3) p2.vx = -Math.sign(dist) * 2;
+            else p2.vx = 0;
+            p2.facing = dist > 0 ? 1 : -1;
+
+            if (Math.abs(dist) < 60 && aiTimer % 20 === 0) {
+                if (Math.random() < 0.7) p2.punch = 12; else p2.kick = 15;
+            }
+            if (p1.punch > 0 && Math.abs(dist) < 70 && Math.random() < 0.6) p2.vy = -10;
+        }
+
+        function draw() {
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, '#112255'); grad.addColorStop(1, '#001133');
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#003366'; ctx.fillRect(0, 190, W, 50);
+
+            drawFighter(p1, '#00ff00');
+            drawFighter(p2, '#ff8800');
+
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(20, 20, p1.health * 2, 15);
+            ctx.fillRect(W - 220, 20, p2.health * 2, 15);
+            ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
+            ctx.strokeRect(20, 20, 200, 15);
+            ctx.strokeRect(W - 220, 20, 200, 15);
+
+            ctx.fillStyle = '#ffff00';
+            ctx.font = '20px "Nokia Cellphone FC"';
+            ctx.fillText('YOU: ' + score1, 20, 60);
+            ctx.fillText('AI: ' + score2, W - 100, 60);
+
+            if (winner) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '40px "Nokia Cellphone FC"';
+                ctx.fillText(winner + ' WINS!', 50, 120);
+            }
+        }
+
+        function update() {
+            if (winner) return;
+
+            p1.vx = (right ? 3 : 0) + (left ? -3 : 0);
+            p1.facing = right ? 1 : left ? -1 : p1.facing;
+            if (jump && p1.y >= 160) p1.vy = -12;
+            if (punch) { p1.punch = 12; punch = false; }
+            if (kick) { p1.kick = 15; kick = false; }
+            jump = false;
+
+            aiUpdate();
+
+            [p1, p2].forEach(f => {
+                f.x += f.vx;
+                if (f.vy !== 0) { f.y += f.vy; f.vy += 0.8; }
+                if (f.y > 160) { f.y = 160; f.vy = 0; }
+                f.x = Math.max(0, Math.min(W-40, f.x));
+                f.punch = Math.max(0, f.punch - 1);
+                f.kick = Math.max(0, f.kick - 1);
+            });
+
+            if (Math.abs(p1.x - p2.x) < 50 && Math.abs(p1.y - p2.y) < 60) {
+                if (p1.punch > 0 || p1.kick > 0) p2.health -= 1.2;
+                if (p2.punch > 0 || p2.kick > 0) p1.health -= 1;
+            }
+
+            if (p1.health <= 0) { score2++; winner = 'AI'; setTimeout(restart, 3000); }
+            if (p2.health <= 0) { score1++; winner = 'YOU'; setTimeout(restart, 3000); }
+        }
+
+        function restart() {
+            p1 = { x: 50, y: 160, vx: 0, vy: 0, health: HEALTH_MAX, facing: 1, punch: 0, kick: 0 };
+            p2 = { x: 220, y: 160, vx: 0, vy: 0, health: HEALTH_MAX, facing: -1, punch: 0, kick: 0 };
+            winner = null; aiTimer = 0;
+        }
+
+        setInterval(() => { update(); draw(); }, 60);
+        draw();
+    </script>
+</body>
+</html>
